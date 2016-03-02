@@ -1,0 +1,52 @@
+ -*- coding: utf-8 -*-
+"""
+Created on Mon Feb 15 11:54:31 2016
+
+@author: groth
+"""
+
+from bs4 import BeautifulSoup
+import sys
+import pymysql
+import datetime
+
+
+datasource_id = sys.argv[1]
+password = sys.argv[2]
+
+print("Making DB Connection")
+db = pymysql.connect(host = "grid6.cs.elon.edu", db ="test", user = "groth", 
+                     passwd = password , port = 3306)
+                     
+cursor = db.cursor()
+
+select_query = "SELECT unixname FROM  `gc_project_indexes`"
+html_query = "SELECT peoplehtml FROM  `gc_project_indexes` WHERE unixname = %s AND datasource_id = %s"
+
+print("Executing Query")
+cursor.execute(select_query)
+
+print("Query Complete")
+full_list = cursor.fetchall()
+start = 0
+for item in full_list:
+    print (item)
+    if "blobwars" in str(item):
+        start = 1
+    cursor.execute(html_query, (item,datasource_id))
+    html = cursor.fetchone()
+    html = str(html)
+    soup = BeautifulSoup(html, "lxml")
+    print(start)
+    for row in soup.findAll('a'):
+        if(row.contents and start ==1):        
+            text = row.contents[0]
+            if "@gmail.com" in text:
+                indexes_query = "INSERT IGNORE INTO `gc_developer_indexes`(`dev_name`, `datasource_id`, `devhtml`, `last_modified`) VALUES (%s,%s,%s,NOW())"
+                devs_query = "INSERT IGNORE INTO `gc_developer_projects`(`datasource_id`, `unixname`, `dev_name`, `last_modified`) VALUES (%s,%s,%s,NOW())"
+                cursor.execute(indexes_query,(text, datasource_id, html))
+                cursor.execute(devs_query,(datasource_id, item, text))
+  
+        
+cursor.close()
+db.close()
